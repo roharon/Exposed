@@ -247,7 +247,7 @@ open class Query(override var set: FieldSet, where: Op<Boolean>?) : AbstractQuer
      * @return Retrieved results as a collection of batched [ResultRow] sub-collections.
      * @sample org.jetbrains.exposed.sql.tests.shared.dml.SelectBatchedTests.testFetchBatchedResultsWithWhereAndSetBatchSize
      */
-    fun fetchBatchedResults(batchSize: Int = 1000): Iterable<Iterable<ResultRow>> {
+    fun fetchBatchedResults(batchSize: Int = 1000, sortOrder: SortOrder = SortOrder.ASC): Iterable<Iterable<ResultRow>> {
         require(batchSize > 0) { "Batch size should be greater than 0." }
         require(limit == null) { "A manual `LIMIT` clause should not be set. By default, `batchSize` will be used." }
         require(orderByExpressions.isEmpty()) {
@@ -260,7 +260,7 @@ open class Query(override var set: FieldSet, where: Op<Boolean>?) : AbstractQuer
             throw UnsupportedOperationException("Batched select only works on tables with an auto-incrementing column")
         }
         limit = batchSize
-        (orderByExpressions as MutableList).add(autoIncColumn to SortOrder.ASC)
+        (orderByExpressions as MutableList).add(autoIncColumn to sortOrder)
         val whereOp = where ?: Op.TRUE
 
         return object : Iterable<Iterable<ResultRow>> {
