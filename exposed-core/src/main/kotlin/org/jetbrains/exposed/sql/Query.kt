@@ -2,6 +2,7 @@ package org.jetbrains.exposed.sql
 
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.statements.Statement
 import org.jetbrains.exposed.sql.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.sql.vendors.ForUpdateOption
@@ -266,10 +267,20 @@ open class Query(override var set: FieldSet, where: Op<Boolean>?) : AbstractQuer
         return object : Iterable<Iterable<ResultRow>> {
             override fun iterator(): Iterator<Iterable<ResultRow>> {
                 return iterator {
-                    var lastOffset = 0L
+                    var lastOffset: Long? = null
                     while (true) {
                         val query = this@Query.copy().adjustWhere {
-                            whereOp and (autoIncColumn greater lastOffset)
+                            return@adjustWhere lastOffset.let {
+                                if (it == null) return@let whereOp
+
+                                return@let if (listOf(SortOrder.ASC, SortOrder.ASC_NULLS_FIRST, SortOrder.ASC_NULLS_LAST)
+                                        .contains(sortOrder)
+                                ) {
+                                    whereOp and (autoIncColumn greater it)
+                                } else {
+                                    whereOp and (autoIncColumn less it)
+                                }
+                            }
                         }
 
                         val results = query.iterator().asSequence().toList()
