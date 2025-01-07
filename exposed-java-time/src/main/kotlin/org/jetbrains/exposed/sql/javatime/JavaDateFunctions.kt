@@ -14,6 +14,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.ZonedDateTime
 import java.time.temporal.Temporal
 
 /** Represents an SQL function that extracts the date part from a given temporal [expr]. */
@@ -84,6 +85,8 @@ object CurrentTimestamp : CurrentTimestampBase<Instant>(JavaInstantColumnType.IN
  * @sample org.jetbrains.exposed.DefaultsTest.testTimestampWithTimeZoneDefaults
  */
 object CurrentTimestampWithTimeZone : CurrentTimestampBase<OffsetDateTime>(JavaOffsetDateTimeColumnType.INSTANCE)
+
+object CurrentDateTimeWithTimeZone : CurrentTimestampBase<ZonedDateTime>(JavaZonedDateTimeColumnType.INSTANCE)
 
 /** Represents an SQL function that extracts the year field from a given temporal [expr]. */
 class Year<T : Temporal?>(val expr: Expression<T>) : Function<Int>(IntegerColumnType()) {
@@ -216,6 +219,9 @@ fun timestampLiteral(value: Instant): LiteralOp<Instant> = LiteralOp(JavaInstant
 /** Returns the specified [value] as a date with time and time zone literal. */
 fun timestampWithTimeZoneLiteral(value: OffsetDateTime): LiteralOp<OffsetDateTime> =
     LiteralOp(JavaOffsetDateTimeColumnType.INSTANCE, value)
+
+fun datetimeWithTimeZoneLiteral(value: ZonedDateTime): LiteralOp<ZonedDateTime> =
+    LiteralOp(JavaZonedDateTimeColumnType.INSTANCE, value)
 
 /** Returns the specified [value] as a duration literal. */
 fun durationLiteral(value: Duration): LiteralOp<Duration> = LiteralOp(JavaDurationColumnType.INSTANCE, value)
