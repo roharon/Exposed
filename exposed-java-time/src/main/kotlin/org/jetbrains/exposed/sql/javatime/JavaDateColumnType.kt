@@ -126,6 +126,9 @@ private fun oracleDateTimeLiteral(instant: Instant) =
 private fun oracleTimestampWithTimezoneLiteral(dateTime: OffsetDateTime) =
     "TO_TIMESTAMP_TZ('${dateTime.format(ORACLE_OFFSET_DATE_TIME_FORMATTER)}', 'YYYY-MM-DD HH24:MI:SS.FF6 TZH:TZM')"
 
+private fun oracleTimestampWithTimezoneLiteral(dateTime: ZonedDateTime) =
+    "TO_TIMESTAMP_TZ('${dateTime.format(ORACLE_OFFSET_DATE_TIME_FORMATTER)}', 'YYYY-MM-DD HH24:MI:SS.FF6 TZH:TZM')"
+
 private fun oracleDateLiteral(instant: Instant) =
     "TO_DATE('${DEFAULT_DATE_STRING_FORMATTER.format(instant)}', 'YYYY-MM-DD')"
 
@@ -430,6 +433,70 @@ class JavaOffsetDateTimeColumnType : ColumnType<OffsetDateTime>(), IDateColumnTy
 }
 
 /**
+ * Column for storing dates and times with time zone, as [ZonedDateTime].
+ *
+ * @sample org.jetbrains.exposed.sql.javatime.datetimeWithTimeZone
+ */
+class JavaZonedDateTimeColumnType : ColumnType<ZonedDateTime>(), IDateColumnType {
+    override val hasTimePart: Boolean = true
+
+    override fun sqlType(): String = currentDialect.dataTypeProvider.timestampWithTimeZoneType()
+
+    override fun nonNullValueToString(value: ZonedDateTime): String = when (currentDialect) {
+        is SQLiteDialect -> "'${value.format(SQLITE_OFFSET_DATE_TIME_FORMATTER)}'"
+        is MysqlDialect -> "'${value.format(MYSQL_OFFSET_DATE_TIME_FORMATTER)}'"
+        is OracleDialect -> oracleTimestampWithTimezoneLiteral(value)
+        else -> "'${value.format(DEFAULT_OFFSET_DATE_TIME_FORMATTER)}'"
+    }
+
+    override fun valueFromDB(value: Any): ZonedDateTime = when (value) {
+        is ZonedDateTime -> value
+        is OffsetDateTime -> value.toZonedDateTime()
+        is String -> {
+            if (currentDialect is SQLiteDialect) {
+                val temporalAccessor = SQLITE_OFFSET_DATE_TIME_FORMATTER.parse(value)
+                if (temporalAccessor.isSupported(ChronoField.OFFSET_SECONDS)) {
+                    ZonedDateTime.from(temporalAccessor)
+                } else {
+                    ZonedDateTime.from(LocalDateTime.from(temporalAccessor).atOffset(UTC))
+                }
+            } else {
+                ZonedDateTime.parse(value)
+            }
+        }
+        else -> error("Unexpected value: $value of ${value::class.qualifiedName}")
+    }
+
+    override fun readObject(rs: ResultSet, index: Int): Any? = when (currentDialect) {
+        is SQLiteDialect -> super.readObject(rs, index)
+        is OracleDialect -> rs.getObject(index, ZonedDateTime::class.java)
+        else -> rs.getObject(index, OffsetDateTime::class.java)
+    }
+
+    override fun notNullValueToDB(value: ZonedDateTime): Any = when (currentDialect) {
+        is SQLiteDialect -> value.format(SQLITE_OFFSET_DATE_TIME_FORMATTER)
+        is MysqlDialect -> value.format(MYSQL_OFFSET_DATE_TIME_FORMATTER)
+        else -> value
+    }
+
+    override fun nonNullValueAsDefaultString(value: ZonedDateTime): String {
+        val dialect = currentDialect
+        return when {
+            dialect is PostgreSQLDialect -> // +00 appended because PostgreSQL stores it in UTC time zone
+                "'${value.format(POSTGRESQL_OFFSET_DATE_TIME_AS_DEFAULT_FORMATTER)}+00'::timestamp with time zone"
+            dialect is H2Dialect && dialect.h2Mode == H2Dialect.H2CompatibilityMode.Oracle ->
+                "'${value.format(POSTGRESQL_OFFSET_DATE_TIME_AS_DEFAULT_FORMATTER)}'"
+            dialect is MysqlDialect -> "'${value.format(MYSQL_FRACTION_OFFSET_DATE_TIME_AS_DEFAULT_FORMATTER)}'"
+            else -> super.nonNullValueAsDefaultString(value)
+        }
+    }
+
+    companion object {
+        internal val INSTANCE = JavaZonedDateTimeColumnType()
+    }
+}
+
+/**
  * Column for storing time-based amounts of time, as [Duration].
  *
  * @sample org.jetbrains.exposed.sql.javatime.duration
@@ -499,6 +566,9 @@ fun Table.timestamp(name: String): Column<Instant> = registerColumn(name, JavaIn
  */
 fun Table.timestampWithTimeZone(name: String): Column<OffsetDateTime> =
     registerColumn(name, JavaOffsetDateTimeColumnType())
+
+
+fun Table.dateTimeWithTimeZone(name: String): Column<ZonedDateTime> = registerColumn(name, JavaZonedDateTimeColumnType())
 
 /**
  * A date column to store a duration.
